@@ -1,0 +1,14 @@
+{
+  "name": "obsidian-ai-bridge",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.22.0",
+    "dotenv": "^16.6.1",
+    "grammy": "^1.46.0"
+  }
+}
