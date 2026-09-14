@@ -1,61 +1,90 @@
-import fs from 'fs/promises';
+import fs from 'fs';
 import path from 'path';
-import dotenv from 'dotenv';
 
-dotenv.config();
+function getTimestampPrefix() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const year = now.getFullYear();
+  const month = pad(now.getMonth() + 1);
+  const day = pad(now.getDate());
+  const hours = pad(now.getHours());
+  const minutes = pad(now.getMinutes());
+  return `${year}-${month}-${day}_${hours}-${minutes}`;
+}
 
-const INBOX_PATH = process.env.OBSIDIAN_INBOX_PATH;
-
-/**
- * Создает новую заметку в формате Markdown в папке Inbox
- */
 export async function saveNoteToVault(title, content, tags = []) {
-  await fs.mkdir(INBOX_PATH, { recursive: true });
+  const vaultPath = process.env.OBSIDIAN_VAULT_PATH;
+  const targetDir = path.join(vaultPath, 'Inbox');
 
-  const cleanTitle = title.replace(/[\\/:*?"<>|]/g, '').trim() || 'Новая заметка';
-  const timestamp = new Date().toISOString().split('T')[0];
-  const fileName = `${timestamp}_${cleanTitle}.md`;
-  const filePath = path.join(INBOX_PATH, fileName);
+  await fs.promises.mkdir(targetDir, { recursive: true });
 
-  const formattedTags = tags.map(t => `#${t.replace(/^#/, '')}`).join(' ');
+  const cleanTitle = title.replace(/[\\/:*?"<>|]/g, '').trim();
+  const prefix = getTimestampPrefix();
+  const fileName = `${prefix}_${cleanTitle}.md`;
+  const filePath = path.join(targetDir, fileName);
 
-  const fileContent = `---
-date: ${new Date().toISOString()}
-tags: [${tags.join(', ')}]
-source: telegram-bot
+  const formattedTags = tags.map(t => `  - ${t.replace(/^#/, '')}`).join('\n');
+  const fileBody = `---
+created: ${new Date().toISOString()}
+tags:
+${formattedTags}
 ---
 
-# ${cleanTitle}
+# ${title}
 
 ${content}
-
----
-**Метки:** ${formattedTags}
 `;
 
-  await fs.writeFile(filePath, fileContent, 'utf-8');
+  await fs.promises.writeFile(filePath, fileBody, 'utf-8');
   return fileName;
 }
 
-/**
- * Перемещает заметку из Inbox в указанную подпапку хранилища
- */
 export async function moveNote(fileName, targetFolder) {
-  // Определяем корневую директорию хранилища (на уровень выше Inbox)
-  const vaultRoot = path.resolve(INBOX_PATH, '..');
-  const sourcePath = path.join(INBOX_PATH, fileName);
-  const targetDir = path.join(vaultRoot, targetFolder);
+  const vaultPath = process.env.OBSIDIAN_VAULT_PATH;
+  const sourcePath = path.join(vaultPath, 'Inbox', fileName);
+  const targetDir = path.join(vaultPath, targetFolder);
   const targetPath = path.join(targetDir, fileName);
 
-  await fs.mkdir(targetDir, { recursive: true });
-  await fs.rename(sourcePath, targetPath);
-  return targetPath;
+  await fs.promises.mkdir(targetDir, { recursive: true });
+  await fs.promises.rename(sourcePath, targetPath);
 }
 
-/**
- * Удаляет заметку из Inbox
- */
 export async function deleteNote(fileName) {
-  const filePath = path.join(INBOX_PATH, fileName);
-  await fs.unlink(filePath);
+  const vaultPath = process.env.OBSIDIAN_VAULT_PATH;
+  const filePath = path.join(vaultPath, 'Inbox', fileName);
+
+  try {
+    await fs.promises.unlink(filePath);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      throw err;
+    }
+  }
+}
+
+export async function appendToDailyNote(text) {
+  const vaultPath = process.env.OBSIDIAN_VAULT_PATH;
+  const dailyDir = path.join(vaultPath, 'Daily');
+
+  await fs.promises.mkdir(dailyDir, { recursive: true });
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  const fileName = `${dateStr}.md`;
+  const filePath = path.join(dailyDir, fileName);
+
+  const entry = `\n- **${timeStr}** ${text.trim()}\n`;
+
+  try {
+    await fs.promises.access(filePath);
+    await fs.promises.appendFile(filePath, entry, 'utf-8');
+  } catch {
+    const initialContent = `# Дневник на ${dateStr}\n${entry}`;
+    await fs.promises.writeFile(filePath, initialContent, 'utf-8');
+  }
+
+  return { dateStr, timeStr, fileName };
 }

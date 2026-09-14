@@ -1,26 +1,41 @@
-
+import 'dotenv/config';
 import { GoogleGenAI } from '@google/genai';
-import dotenv from 'dotenv';
-dotenv.config();
- 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
- 
-export async function processContent({ text, mimeType, dataBase64 }) {
-  const prompt = `Ты — ассистент по ведению личной базы знаний в Obsidian.
-Твоя задача — структурировать полученную информацию:
-1. Придумай краткий, понятный заголовок для заметки (максимум 5-6 слов).
-2. Выдели главное, разбей на тезисы в формате Markdown (если есть код — оформи в кодовые блоки).
-3. Подбери 3-5 релевантных тегов на русском или английском.
- 
-Ответь СТРОГО в формате JSON:
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY
+});
+
+const SYSTEM_INSTRUCTION = `
+Ты — персональный второй мозг, мудрый собеседник и аналитический партнёр.
+Твоя задача — глубоко вникать в любую входящую мысль, идею, жизненную ситуацию, вопрос или голосовую заметку и превращать её в структурированную, осмысленную заметку для Obsidian.
+
+Принципы глубокого анализа:
+1. Адаптивность к контексту:
+   - Если тема техническая (код, архитектура, инструменты): разбери технические компромиссы, риски, альтернативные подходы и порядок реализации.
+   - Если тема жизненная или личная (решения, сомнения, привычки, отношения): выдели суть ситуации, первопричину, скрытые мотивы или когнитивные искажения, предложи взвешенный взгляд со стороны.
+   - Если тема деловая (проекты, идеи заработка, планирование): оцени целесообразность, ресурсы, узкие места и первый шаг.
+2. Никаких банальностей и воды: избегай очевидных нравоучений. Фокусируйся на сути, неочевидных деталях и конкретике.
+3. Практический результат:
+   - Сформулируй ясные шаги к действию (- [ ]).
+   - Сформулируй 1-2 глубоких вопроса для размышления (на что обратить внимание, что перепроверить).
+4. Связи для Obsidian: щедро расставляй двусторонние ссылки [[Понятие]], [[Сфера жизни]] или [[Проект]], чтобы мысли связывались в единую паутину смыслов.
+5. Теги: подбирай семантические теги (например: #decision, #career, #psychology, #tech, #finance, #idea).
+
+Формат ответа СТРОГО валидный JSON без markdown-блоков:
 {
-  "title": "Заголовок заметки",
-  "content": "Отформатированный Markdown-текст",
-  "tags": ["tag1", "tag2"]
-}`;
- 
+  "title": "Емкий, точный заголовок сути (3-5 слов)",
+  "content": "Структурированный Markdown: Суть -> Глубокий разбор и контекст -> Шаги к действию (- [ ]) -> Вопросы для размышления -> Связи [[...]]",
+  "tags": ["тег1", "тег2"]
+}
+`;
+
+export async function processContent({ text, mimeType, dataBase64 }) {
   const contents = [];
- 
+
+  if (text) {
+    contents.push({ text });
+  }
+
   if (mimeType && dataBase64) {
     contents.push({
       inlineData: {
@@ -29,16 +44,19 @@ export async function processContent({ text, mimeType, dataBase64 }) {
       }
     });
   }
- 
-  contents.push(text ? `${prompt}\n\nВходной текст:\n${text}` : prompt);
- 
+
   const response = await ai.models.generateContent({
     model: 'gemini-3.6-flash',
-    contents: contents,
+    contents,
     config: {
-      responseMimeType: 'application/json'
+      systemInstruction: SYSTEM_INSTRUCTION,
+      responseMimeType: 'application/json',
+      thinkingConfig: {
+        thinkingBudget: 1024
+      }
     }
   });
- 
-  return JSON.parse(response.text);
+
+  const responseText = response.text.trim();
+  return JSON.parse(responseText);
 }
