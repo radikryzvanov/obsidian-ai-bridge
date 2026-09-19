@@ -55,7 +55,28 @@ const VIDEO_SYSTEM_INSTRUCTION = `
  
 function parseAiResponse(response) {
   const responseText = response.text.trim();
-  return JSON.parse(responseText);
+ 
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    // Модель иногда добавляет текст до/после JSON, несмотря на просьбу
+    // отвечать строго JSON. Пробуем вытащить сам JSON-объект из текста.
+    const firstBrace = responseText.indexOf('{');
+    const lastBrace = responseText.lastIndexOf('}');
+ 
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const extracted = responseText.slice(firstBrace, lastBrace + 1);
+      try {
+        return JSON.parse(extracted);
+      } catch {
+        // не получилось — падаем ниже с подробным логом
+      }
+    }
+ 
+    console.error('❌ Gemini вернул невалидный JSON. Полный текст ответа:');
+    console.error(responseText);
+    throw new Error('Gemini вернул ответ не в формате JSON (подробности в логе выше).');
+  }
 }
  
 // Для небольших файлов (голосовые/фото из Telegram, обычно до нескольких МБ) —
