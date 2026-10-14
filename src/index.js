@@ -59,7 +59,7 @@ const HELP_TEXT = `Просто пришлите мысль, голосовое,
 • /inbox — что ждёт разбора
 
 Учёба:
-• /quiz [тема] — проверка знаний по конспектам (/skip, /stop)
+• /quiz [тема] — проверка знаний по конспектам, отвечать можно текстом или голосом (/skip, /stop)
 • /cards — повторение карточек
 • /study тема часы — записать время учёбы, например /study Angular 1.5
 • /review — обзор недели`;
@@ -323,7 +323,7 @@ export function createBot(deps = defaultDeps) {
   async function askNextQuestion(ctx, quiz) {
     const q = quiz.questions[quiz.index];
     await ctx.reply(
-      `❓ Вопрос ${quiz.index + 1} из ${quiz.questions.length}\n\n${q.question}\n\nОтвечайте текстом. /skip — пропустить, /stop — закончить.`
+      `❓ Вопрос ${quiz.index + 1} из ${quiz.questions.length}\n\n${q.question}\n\nОтвечайте текстом или голосом. /skip — пропустить, /stop — закончить.`
     );
   }
 
@@ -339,6 +339,41 @@ export function createBot(deps = defaultDeps) {
       return;
     }
     await askNextQuestion(ctx, quiz);
+  }
+
+  // Голосовой ответ: расшифровываем речь и дальше проверяем как обычный текст
+  async function handleQuizVoice(ctx, quiz, voice, mimeType) {
+    if (voice.file_size && voice.file_size > mediaModule.TELEGRAM_FILE_LIMIT) {
+      return ctx.reply(TG_LIMIT_TEXT);
+    }
+    const status = await ctx.reply('🎙 Слушаю ваш ответ...');
+    let text = '';
+    try {
+      const buffer = await deps.media.downloadTelegramFile(ctx.api, voice.file_id);
+      text = await deps.ai.transcribeAudio({ dataBase64: buffer.toString('base64'), mimeType });
+    } catch (error) {
+      console.error('Ошибка расшифровки голоса:', error);
+      return safeEdit(
+        ctx.api,
+        ctx.chat.id,
+        status.message_id,
+        `❌ Не удалось расслышать ответ: ${friendlyError(error)}\nПопробуйте ещё раз или напишите ответ текстом.`
+      );
+    }
+
+    if (!text) {
+      return safeEdit(
+        ctx.api,
+        ctx.chat.id,
+        status.message_id,
+        '🤷 Не разобрал речь. Попробуйте сказать ещё раз или напишите ответ текстом.'
+      );
+    }
+
+    await safeEdit(ctx.api, ctx.chat.id, status.message_id, `🎙 Расслышал: «${escapeHtml(text)}»`, {
+      parse_mode: 'HTML'
+    });
+    await handleQuizAnswer(ctx, quiz, text);
   }
 
   async function handleQuizAnswer(ctx, quiz, text) {
@@ -622,14 +657,21 @@ export function createBot(deps = defaultDeps) {
     return handleTextNote(ctx, text);
   });
 
-  bot.on('message:voice', (ctx) =>
-    handleBinary(ctx, {
-      fileId: ctx.message.voice.file_id,
-      fileSize: ctx.message.voice.file_size,
-      mimeType: ctx.message.voice.mime_type || 'audio/ogg',
+  bot.on('message:voice', async (ctx) => {
+    const voice = ctx.message.voice;
+    const mimeType = voice.mime_type || 'audio/ogg';
+
+    // Во время квиза голосовое — это ответ на вопрос
+    const quiz = getQuiz(ctx.chat.id);
+    if (quiz) return handleQuizVoice(ctx, quiz, voice, mimeType);
+
+    return handleBinary(ctx, {
+      fileId: voice.file_id,
+      fileSize: voice.file_size,
+      mimeType,
       startText: '🎙 Слушаю голос и анализирую...'
-    })
-  );
+    });
+  });
 
   bot.on('message:audio', (ctx) =>
     handleBinary(ctx, {

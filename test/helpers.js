@@ -42,6 +42,7 @@ export function fakeDeps(overrides = {}) {
       ]
     }),
     checkAnswer: async () => ({ verdict: 'correct', feedback: 'Всё верно.' }),
+    transcribeAudio: async () => 'это реактивное значение',
     askVault: async ({ notes }) => ({ answer: 'Ответ из заметок.', sources: [notes[0].base] }),
     weeklyReview: async () => ({ title: 'Обзор недели', content: 'Итоги недели', tags: ['review'], related: [], cards: [] }),
     ...(overrides.ai || {})

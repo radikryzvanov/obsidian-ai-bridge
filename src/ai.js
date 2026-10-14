@@ -342,6 +342,29 @@ feedback: 1–3 предложения простыми словами: что �
   return { verdict, feedback: String(raw.feedback || '').trim() };
 }
 
+// ---------- Расшифровка голоса (ответы в квизе) ----------
+
+const TRANSCRIBE_SCHEMA = {
+  type: 'object',
+  properties: { text: { type: 'string' } },
+  required: ['text']
+};
+
+export async function transcribeAudio({ dataBase64, mimeType = 'audio/ogg' }) {
+  const instruction = `
+Расшифруй речь из аудио дословно, на том языке, на котором говорит человек.
+Верни только сказанный текст, без комментариев и пояснений.
+Если речи нет или её невозможно разобрать — верни пустую строку.`;
+  const response = await generate({
+    contents: [{ inlineData: { mimeType, data: dataBase64 } }],
+    instruction,
+    schema: TRANSCRIBE_SCHEMA,
+    thinking: ThinkingLevel.MINIMAL
+  });
+  const raw = parseJson(response);
+  return String(raw.text || '').trim();
+}
+
 // ---------- Обзор недели ----------
 
 export async function weeklyReview({ daily, notes, study, tasks, notesIndex = '' }) {

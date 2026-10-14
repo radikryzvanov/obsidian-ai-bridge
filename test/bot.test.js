@@ -180,6 +180,41 @@ test('квиз: вопросы, проверка ответов, итог пиш
   assert.equal((await listDir(inbox())).length, 2);
 });
 
+test('квиз: голосовой ответ расшифровывается и проверяется, заметка не создаётся', async () => {
+  await fs.promises.mkdir(inbox(), { recursive: true });
+  await fs.promises.writeFile(path.join(inbox(), 'k.md'), '# К\nТекст', 'utf-8');
+  const checked = [];
+  const deps = fakeDeps({
+    ai: {
+      checkAnswer: async ({ userAnswer }) => {
+        checked.push(userAnswer);
+        return { verdict: 'correct', feedback: 'Верно.' };
+      }
+    }
+  });
+  const { api } = makeBot(deps);
+  await api.sendText('/quiz');
+  await api.sendMedia({ voice: { file_id: 'v1', file_unique_id: 'u', duration: 2, mime_type: 'audio/ogg', file_size: 1000 } });
+
+  assert.deepEqual(checked, ['это реактивное значение']);
+  assert.match(api.texts().join('\n'), /Расслышал: «это реактивное значение»/);
+  assert.match(api.lastText(), /Вопрос 2 из 2/);
+  assert.equal((await listDir(inbox())).length, 1); // новых заметок не появилось
+});
+
+test('квиз: если речь не разобрана, вопрос остаётся и просим повторить', async () => {
+  await fs.promises.mkdir(inbox(), { recursive: true });
+  await fs.promises.writeFile(path.join(inbox(), 'k.md'), '# К\nТекст', 'utf-8');
+  const deps = fakeDeps({ ai: { transcribeAudio: async () => '' } });
+  const { api } = makeBot(deps);
+  await api.sendText('/quiz');
+  await api.sendMedia({ voice: { file_id: 'v1', file_unique_id: 'u', duration: 1, mime_type: 'audio/ogg', file_size: 500 } });
+
+  assert.match(api.lastText(), /Не разобрал речь/);
+  await api.sendText('блок интерфейса'); // квиз продолжается с первого вопроса
+  assert.match(api.lastText(), /Вопрос 2 из 2/);
+});
+
 test('/skip и /stop управляют квизом', async () => {
   await fs.promises.mkdir(inbox(), { recursive: true });
   await fs.promises.writeFile(path.join(inbox(), 'k.md'), '# К\nТекст', 'utf-8');
