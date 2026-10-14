@@ -109,6 +109,10 @@ export function formatSuccessMessage({ title, fileName, folder = INBOX, tags = [
 export function friendlyError(error) {
   if (error?.userMessage) return error.userMessage;
   const status = Number(error?.status);
+  if (status === 429 && /PerDay/i.test(String(error?.message || ''))) {
+    const hours = String(error.message).match(/retry in (\d+)h/i)?.[1];
+    return `Дневной бесплатный лимит Gemini исчерпан (429).${hours ? ` Сбросится примерно через ${Number(hours) + 1} ч.` : ''} Пока можно писать заметки (они сохранятся без ИИ).`;
+  }
   if (status === 429) return 'Превышен лимит запросов к Gemini (429). Попробуйте через минуту.';
   if (status === 503) return 'Сервис Gemini перегружен (503). Попробуйте через несколько минут.';
   if ([500, 502, 504].includes(status)) return `Временная ошибка на стороне Gemini (${status}). Попробуйте позже.`;

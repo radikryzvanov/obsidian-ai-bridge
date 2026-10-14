@@ -185,6 +185,11 @@ function isTemporary(error) {
 }
 
 // Повторяет запрос при временных ошибках, но не при ошибках самого запроса (400, 401, 403, 404)
+// Дневной лимит бесплатных запросов: повторять бессмысленно, лучше сразу переключиться на другую модель
+export function isDailyQuota(error) {
+  return Number(error?.status) === 429 && /PerDay/i.test(String(error?.message || ''));
+}
+
 async function withRetry(fn, attempts = 3) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -192,7 +197,7 @@ async function withRetry(fn, attempts = 3) {
       return await fn();
     } catch (error) {
       lastError = error;
-      if (!isTemporary(error)) throw error;
+      if (!isTemporary(error) || isDailyQuota(error)) throw error;
       const code = error.status ?? error.cause?.code ?? '';
       console.error(`⚠️ Попытка ${attempt}/${attempts} не удалась: ${code} ${error.message}`);
       if (attempt < attempts) {

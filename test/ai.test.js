@@ -96,3 +96,16 @@ test('понятные тексты ошибок содержат код', () =>
   );
   assert.match(friendlyError(new Error('fetch failed')), /Нет связи с серверами Gemini\. Проверьте/);
 });
+
+test('дневной лимит (429): без повторов сразу уходим на запасную модель', async () => {
+  const quota = () =>
+    Object.assign(new Error('Quota exceeded ... PerDay ... Please retry in 10h34m20s'), { status: 429 });
+  const { client, calls } = fakeClient((params) => {
+    if (params.model === 'gemini-3.6-flash') throw quota();
+    return ok;
+  });
+  setClientForTests(client);
+  await checkAnswer(input);
+  assert.deepEqual(calls, ['gemini-3.6-flash', 'gemini-3.8-flash']);
+  assert.match(friendlyError(quota()), /Дневной бесплатный лимит.*через 11 ч/);
+});
