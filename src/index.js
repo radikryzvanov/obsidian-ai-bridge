@@ -109,9 +109,12 @@ export function formatSuccessMessage({ title, fileName, folder = INBOX, tags = [
 export function friendlyError(error) {
   if (error?.userMessage) return error.userMessage;
   const status = Number(error?.status);
-  if (status === 429) return 'Превышен лимит запросов к Gemini. Попробуйте через минуту.';
-  if (status === 503 || status === 500) return 'Сервис Gemini сейчас перегружен. Попробуйте позже.';
+  if (status === 429) return 'Превышен лимит запросов к Gemini (429). Попробуйте через минуту.';
+  if (status === 503) return 'Сервис Gemini перегружен (503). Попробуйте через несколько минут.';
+  if ([500, 502, 504].includes(status)) return `Временная ошибка на стороне Gemini (${status}). Попробуйте позже.`;
   if (status === 401 || status === 403) return 'Gemini не принял ключ API. Проверьте GEMINI_API_KEY.';
+  if (status === 404) return 'Модель Gemini не найдена. Проверьте GEMINI_MODEL в файле .env.';
+  if (status === 400) return `Gemini отклонил запрос (400): ${String(error?.message || '').slice(0, 200)}`;
   return String(error?.message || 'Неизвестная ошибка').slice(0, 250);
 }
 

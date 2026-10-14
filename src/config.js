@@ -8,6 +8,11 @@ export const config = {
   get allowedId() { return Number(process.env.ALLOWED_USER_ID); },
   get geminiKey() { return process.env.GEMINI_API_KEY; },
   get model() { return process.env.GEMINI_MODEL || 'gemini-3.6-flash'; },
+  // Запасная модель: используется, если основная перегружена или отвечает ошибкой сервера
+  get fallbackModel() {
+    if (process.env.GEMINI_FALLBACK_MODEL !== undefined) return process.env.GEMINI_FALLBACK_MODEL.trim();
+    return this.model === 'gemini-3.6-flash' ? 'gemini-3.8-flash' : 'gemini-3.6-flash';
+  },
   get vaultPath() { return process.env.OBSIDIAN_VAULT_PATH; },
   get vaultName() { return process.env.OBSIDIAN_VAULT_NAME || 'Obsidian Vault'; },
   get dataDir() { return path.resolve(process.env.DATA_DIR || './data'); },

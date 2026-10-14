@@ -172,7 +172,19 @@ function normalizeNote(raw) {
   };
 }
 
-// Повторяет запрос при временных ошибках (сеть, перегрузка), но не при ошибках запроса
+// Для тестов: пауза между повторами и подмена клиента Gemini
+export const retryConfig = { delayMs: 2000 };
+export function setClientForTests(fake) {
+  client = fake;
+}
+
+// Ошибки, при которых имеет смысл повторить или сменить модель (сеть, перегрузка, сбой сервера)
+function isTemporary(error) {
+  const status = Number(error?.status);
+  return !status || [429, 500, 502, 503, 504].includes(status);
+}
+
+// Повторяет запрос при временных ошибках, но не при ошибках самого запроса (400, 401, 403, 404)
 async function withRetry(fn, attempts = 3) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -180,11 +192,10 @@ async function withRetry(fn, attempts = 3) {
       return await fn();
     } catch (error) {
       lastError = error;
-      const status = Number(error?.status);
-      if ([400, 401, 403, 404].includes(status)) throw error;
-      console.error(`⚠️ Попытка ${attempt}/${attempts} не удалась: ${error.message}`);
+      if (!isTemporary(error)) throw error;
+      console.error(`⚠️ Попытка ${attempt}/${attempts} не удалась: ${error.status ?? ''} ${error.message}`);
       if (attempt < attempts) {
-        await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+        await new Promise((resolve) => setTimeout(resolve, retryConfig.delayMs * attempt));
       }
     }
   }
@@ -192,9 +203,9 @@ async function withRetry(fn, attempts = 3) {
 }
 
 async function generate({ contents, instruction, schema, thinking = ThinkingLevel.LOW }) {
-  return withRetry(() =>
+  const request = (model) =>
     getClient().models.generateContent({
-      model: config.model,
+      model,
       contents,
       config: {
         systemInstruction: instruction,
@@ -202,8 +213,16 @@ async function generate({ contents, instruction, schema, thinking = ThinkingLeve
         responseJsonSchema: schema,
         thinkingConfig: { thinkingLevel: thinking }
       }
-    })
-  );
+    });
+
+  try {
+    return await withRetry(() => request(config.model));
+  } catch (error) {
+    const fallback = config.fallbackModel;
+    if (!fallback || fallback === config.model || !isTemporary(error)) throw error;
+    console.warn(`⚠️ Основная модель недоступна (${error.status ?? error.message}), пробую запасную: ${fallback}`);
+    return withRetry(() => request(fallback), 2);
+  }
 }
 
 // ---------- Заметки ----------
@@ -359,7 +378,7 @@ export async function transcribeAudio({ dataBase64, mimeType = 'audio/ogg' }) {
     contents: [{ inlineData: { mimeType, data: dataBase64 } }],
     instruction,
     schema: TRANSCRIBE_SCHEMA,
-    thinking: ThinkingLevel.MINIMAL
+    thinking: ThinkingLevel.LOW
   });
   const raw = parseJson(response);
   return String(raw.text || '').trim();
