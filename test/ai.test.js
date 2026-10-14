@@ -90,4 +90,9 @@ test('понятные тексты ошибок содержат код', () =>
   assert.match(friendlyError({ status: 404 }), /GEMINI_MODEL/);
   assert.match(friendlyError({ status: 400, message: 'invalid schema' }), /400.*invalid schema/);
   assert.match(friendlyError({ status: 401 }), /GEMINI_API_KEY/);
+  assert.match(
+    friendlyError({ message: 'fetch failed', cause: { code: 'ETIMEDOUT' } }),
+    /Нет связи с серверами Gemini \(ETIMEDOUT\).*VPN/
+  );
+  assert.match(friendlyError(new Error('fetch failed')), /Нет связи с серверами Gemini\. Проверьте/);
 });

@@ -193,7 +193,8 @@ async function withRetry(fn, attempts = 3) {
     } catch (error) {
       lastError = error;
       if (!isTemporary(error)) throw error;
-      console.error(`⚠️ Попытка ${attempt}/${attempts} не удалась: ${error.status ?? ''} ${error.message}`);
+      const code = error.status ?? error.cause?.code ?? '';
+      console.error(`⚠️ Попытка ${attempt}/${attempts} не удалась: ${code} ${error.message}`);
       if (attempt < attempts) {
         await new Promise((resolve) => setTimeout(resolve, retryConfig.delayMs * attempt));
       }

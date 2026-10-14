@@ -115,6 +115,13 @@ export function friendlyError(error) {
   if (status === 401 || status === 403) return 'Gemini не принял ключ API. Проверьте GEMINI_API_KEY.';
   if (status === 404) return 'Модель Gemini не найдена. Проверьте GEMINI_MODEL в файле .env.';
   if (status === 400) return `Gemini отклонил запрос (400): ${String(error?.message || '').slice(0, 200)}`;
+
+  // Запрос не дошёл до сервера вообще: нет интернета, выключен VPN, блокировка
+  const causeCode = error?.cause?.code || error?.code;
+  const networkCodes = ['ENOTFOUND', 'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET'];
+  if (!status && (error?.message === 'fetch failed' || networkCodes.includes(causeCode))) {
+    return `Нет связи с серверами Gemini${causeCode ? ` (${causeCode})` : ''}. Проверьте интернет и VPN, затем попробуйте снова.`;
+  }
   return String(error?.message || 'Неизвестная ошибка').slice(0, 250);
 }
 
