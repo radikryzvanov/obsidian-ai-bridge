@@ -295,6 +295,34 @@ test('голосовое сообщение обрабатывается, бол
   assert.equal((await listDir(inbox())).length, 1);
 });
 
+test('Word-документ (.docx) превращается в заметку, неизвестный тип файла отклоняется', async () => {
+  const seen = [];
+  const deps = fakeDeps({
+    ai: {
+      processContent: async ({ text }) => {
+        seen.push(text);
+        return { title: 'Документ', content: 'Конспект', tags: [], related: [], cards: [] };
+      }
+    }
+  });
+  const { api } = makeBot(deps);
+  await api.sendMedia({
+    document: {
+      file_id: 'd1',
+      file_unique_id: 'u',
+      file_name: 'План.docx',
+      mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      file_size: 5000
+    }
+  });
+  assert.equal((await listDir(inbox())).length, 1);
+  assert.match(seen[0], /Документ Word «План\.docx»:\n\nТекст из Word-документа/);
+
+  await api.sendMedia({ document: { file_id: 'd2', file_unique_id: 'u2', file_name: 'a.zip', mime_type: 'application/zip', file_size: 10 } });
+  assert.match(api.lastText(), /PDF, Word \(\.docx\)/);
+  assert.equal((await listDir(inbox())).length, 1);
+});
+
 test('неизвестная команда не превращается в заметку', async () => {
   const { api } = makeBot();
   await api.sendText('/qwerty');

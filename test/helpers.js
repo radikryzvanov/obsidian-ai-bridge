@@ -55,6 +55,7 @@ export function fakeDeps(overrides = {}) {
       throw new Error('не должно вызываться');
     },
     downloadTelegramFile: async () => Buffer.from('данные'),
+    extractDocxText: async () => 'Текст из Word-документа',
     ...(overrides.media || {})
   };
   return { ai, media };

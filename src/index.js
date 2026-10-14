@@ -43,7 +43,7 @@ const INLINE_LIMIT = 8 * 1024 * 1024; // файлы больше 8 МБ отпр
 const TG_LIMIT_TEXT =
   '⚠️ Telegram не даёт боту скачивать файлы больше 20 МБ. Пришлите ссылку (YouTube и др.) или файл поменьше.';
 
-const HELP_TEXT = `Просто пришлите мысль, голосовое, фото, видео, PDF или ссылку — я сделаю заметку в Inbox.
+const HELP_TEXT = `Просто пришлите мысль, голосовое, фото, видео, PDF, Word-документ или ссылку — я сделаю заметку в Inbox.
 
 Что можно:
 • ссылка на YouTube/Instagram/VK/RuTube/TikTok — конспект видео
@@ -668,10 +668,13 @@ export function createBot(deps = defaultDeps) {
     const name = doc.file_name || 'документ';
     const mime = doc.mime_type || '';
     const isPdf = mime === 'application/pdf' || /\.pdf$/i.test(name);
+    const isDocx =
+      mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      /\.docx$/i.test(name);
     const isText = mime.startsWith('text/') || /\.(md|markdown|txt)$/i.test(name);
 
-    if (!isPdf && !isText) {
-      return ctx.reply('Пока умею читать PDF и текстовые файлы (.txt, .md). Для остального пришлите текст или фото.');
+    if (!isPdf && !isText && !isDocx) {
+      return ctx.reply('Пока умею читать PDF, Word (.docx) и текстовые файлы (.txt, .md). Для остального пришлите текст или фото.');
     }
 
     if (isPdf) {
@@ -687,9 +690,11 @@ export function createBot(deps = defaultDeps) {
     if (doc.file_size && doc.file_size > mediaModule.TELEGRAM_FILE_LIMIT) return ctx.reply(TG_LIMIT_TEXT);
     try {
       const buffer = await deps.media.downloadTelegramFile(ctx.api, doc.file_id);
-      const content = buffer.toString('utf-8').slice(0, 120000);
+      const fullText = isDocx ? await deps.media.extractDocxText(buffer) : buffer.toString('utf-8');
+      const content = fullText.slice(0, 120000);
       const caption = ctx.message.caption ? `${ctx.message.caption}\n\n` : '';
-      await handleTextNote(ctx, `${caption}Файл «${name}»:\n\n${content}`);
+      const label = isDocx ? 'Документ Word' : 'Файл';
+      await handleTextNote(ctx, `${caption}${label} «${name}»:\n\n${content}`);
     } catch (error) {
       console.error('Ошибка чтения текстового файла:', error);
       await ctx.reply(`❌ Не удалось прочитать файл: ${friendlyError(error)}`);

@@ -288,6 +288,18 @@ export async function fetchArticleText(rawUrl) {
   return { title: titleMatch ? htmlToText(titleMatch[1]) : '', text: text.slice(0, 120000) };
 }
 
+// ---------- Word (.docx) ----------
+
+// Gemini не читает .docx напрямую, поэтому сначала достаём текст через mammoth
+export async function extractDocxText(buffer) {
+  const mammoth = (await import('mammoth')).default;
+  const { value } = await mammoth.extractRawText({ buffer });
+  if (!value || !value.trim()) {
+    throw new UserError('Не удалось извлечь текст из документа (возможно, файл пустой или защищён).');
+  }
+  return value;
+}
+
 // ---------- Файлы из Telegram ----------
 
 export const TELEGRAM_FILE_LIMIT = 20 * 1024 * 1024;
