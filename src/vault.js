@@ -170,7 +170,8 @@ export async function notesForQuiz(topic, limit = 5) {
     (n) => n.folder === 'Учеба' || n.tags.some((t) => LEARN_TAGS.includes(t.toLowerCase()))
   );
   const pool = study.length ? study : notes;
-  return pool.sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, limit);
+  // Без темы берём только самую свежую заметку, чтобы вопросы не смешивались
+  return pool.sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, 1);
 }
 
 // Все незакрытые задачи (- [ ] ...) из хранилища
