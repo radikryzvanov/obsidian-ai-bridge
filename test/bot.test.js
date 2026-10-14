@@ -215,6 +215,29 @@ test('квиз: если речь не разобрана, вопрос оста
   assert.match(api.lastText(), /Вопрос 2 из 2/);
 });
 
+test('квиз: если проверка ответа не удалась, показываем эталон и идём дальше без балла', async () => {
+  await fs.promises.mkdir(inbox(), { recursive: true });
+  await fs.promises.writeFile(path.join(inbox(), 'k.md'), '# К\nТекст', 'utf-8');
+  const deps = fakeDeps({
+    ai: {
+      checkAnswer: async () => {
+        throw Object.assign(new Error('overloaded'), { status: 503 });
+      }
+    }
+  });
+  const { api } = makeBot(deps);
+  await api.sendText('/quiz');
+  await api.sendText('мой ответ');
+
+  const all = api.texts().join('\n');
+  assert.match(all, /Не удалось проверить ответ.*503/s);
+  assert.match(all, /Эталон: Реактивное значение/);
+  assert.match(api.lastText(), /Вопрос 2 из 2/);
+
+  await api.sendText('ещё ответ');
+  assert.match(api.lastText(), /Результат: 0 из 2/);
+});
+
 test('/skip и /stop управляют квизом', async () => {
   await fs.promises.mkdir(inbox(), { recursive: true });
   await fs.promises.writeFile(path.join(inbox(), 'k.md'), '# К\nТекст', 'utf-8');

@@ -411,8 +411,10 @@ export function createBot(deps = defaultDeps) {
         ctx.api,
         ctx.chat.id,
         status.message_id,
-        `❌ Не удалось проверить ответ: ${friendlyError(error)}\nПопробуйте отправить ответ ещё раз.`
+        `⚠️ Не удалось проверить ответ: ${escapeHtml(friendlyError(error))}\nВопрос засчитан без оценки.\n\n📌 Эталон: ${escapeHtml(q.answer)}`,
+        { parse_mode: 'HTML' }
       );
+      await advanceQuiz(ctx, quiz);
     }
   }
 
