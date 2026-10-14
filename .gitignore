@@ -3,3 +3,6 @@ node_modules/
 .env.*
 !.env.example
 cookies.txt
+data/
+.vscode/
+*.log
